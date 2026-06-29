@@ -1,0 +1,234 @@
+{
+  "name": "Robust Contact Form Automation (Mocked)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "contact-form-submit",
+        "options": {}
+      },
+      "id": "5a2c67f9-e27e-4daf-99e6-340abd45a6b9",
+      "name": "Webhook: Form Ingestion",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -928,
+        128
+      ],
+      "webhookId": "31360c66-2e44-4df7-84e0-ace0f6bb504b"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Simulate raw inbound payload from the contact form\nreturn [{\n  json: {\n    name: \"Jane Doe\",\n    email: \"jane.doe@example.com\",\n    company: \"Acme Corp\",\n    message: \"Looking forward to automating our operations!\"\n  }\n}];"
+      },
+      "id": "d5467af5-5932-4721-b0ff-7d79ab5ce43f",
+      "name": "Mock Inbound Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -704,
+        128
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Simulate pulling existing database records from a Google Sheet\nreturn [\n  { json: { id: 1, name: \"Alex Smith\", email: \"alex@smith.com\" } },\n  { json: { id: 2, name: \"John Carman\", email: \"john@carman.com\" } }\n  // Note: 'jane.doe@example.com' is missing here -> New Contact behavior\n];"
+      },
+      "id": "2258b216-2985-4c39-9558-38d95567c362",
+      "name": "Mock: Fetch Google Sheet Records",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -480,
+        128
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.email }}",
+              "operation": "notContains",
+              "value2": "={{ $('Mock Inbound Data').item.json.email }}"
+            }
+          ]
+        },
+        "combineOperation": "any"
+      },
+      "id": "bee9ad29-0ac8-48ca-837c-1e04dad80e5d",
+      "name": "If: Is New Contact?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        -224,
+        128
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Simulate appending data to Google Sheets\nconst newContact = $('Mock Inbound Data').first().json;\nreturn [{\n  json: {\n    status: \"success\",\n    row_inserted: 3,\n    data: newContact,\n    timestamp: new Date().toISOString()\n  }\n}];"
+      },
+      "id": "0966fd23-14a0-41f3-8294-ecb4a4b02192",
+      "name": "Mock: Append to Google Sheet",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        16,
+        -64
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Simulate SMTP outbound server relay\nconst recipient = $('Mock Inbound Data').first().json.email;\nreturn [{\n  json: {\n    messageId: \"<abc-123-xyz@smtp.mock.com>\",\n    accepted: [recipient],\n    response: \"250 2.0.0 OK Recipient Welcomed\"\n  }\n}];"
+      },
+      "id": "4d6a2ed9-33cb-49e7-a3fd-a9872647f12c",
+      "name": "Mock: Send Welcome Email",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        240,
+        -64
+      ],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const inbound = $('Mock Inbound Data').first().json;\nconst isNew = $('If: Is New Contact?').first().json ? true : false;\n\nreturn [{\n  json: {\n    channel: \"#team-leads\",\n    text: ` *New Lead Inbound*\\n• *Name:* ${inbound.name}\\n• *Company:* ${inbound.company}\\n• *Status:* ${isNew ? ' Net New Record Added' : ' Returning Lead - Record Found'}`\n  }\n}];"
+      },
+      "id": "60cbd2a3-ab63-4b1a-9a70-8ef2f3a45105",
+      "name": "Mock: Post to Slack",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        480,
+        144
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "5266a481-e243-4502-8eff-4443909ec5aa",
+      "name": "Error Trigger",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        -928,
+        384
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Safely fetch the error trigger context\nconst errorData = $('Error Trigger').first().json;\n\nreturn [{\n  json: {\n    channel: \"#ops-alerts\",\n    text: `*Pipeline Failure Alert*\\n• *Node:* ${errorData.lastNodeExecuted}\\n• *Reason:* ${errorData.error?.message || 'Unknown error context'}`\n  }\n}];"
+      },
+      "id": "416559a4-7597-44b8-8b67-d502e0f51c83",
+      "name": "Alert Ops via Slack",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -704,
+        384
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook: Form Ingestion": {
+      "main": [
+        [
+          {
+            "node": "Mock Inbound Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mock Inbound Data": {
+      "main": [
+        [
+          {
+            "node": "Mock: Fetch Google Sheet Records",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mock: Fetch Google Sheet Records": {
+      "main": [
+        [
+          {
+            "node": "If: Is New Contact?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If: Is New Contact?": {
+      "main": [
+        [
+          {
+            "node": "Mock: Append to Google Sheet",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Mock: Post to Slack",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mock: Append to Google Sheet": {
+      "main": [
+        [
+          {
+            "node": "Mock: Send Welcome Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mock: Send Welcome Email": {
+      "main": [
+        [
+          {
+            "node": "Mock: Post to Slack",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Error Trigger": {
+      "main": [
+        [
+          {
+            "node": "Alert Ops via Slack",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "6142b6ff-b994-4e40-be39-dc0425bbd0c0",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "9508b9a29b98cb50d8e0e5d34b4408c4438de403dc87d67b37e995af40356315"
+  },
+  "nodeGroups": [],
+  "id": "brn056qpE5kmHoRV",
+  "tags": []
+}
